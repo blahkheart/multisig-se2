@@ -8,12 +8,14 @@ import { toast } from "react-hot-toast";
 import { useDebounce } from "usehooks-ts";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { notification } from "~~/utils/scaffold-eth";
+import WalletConnectInput from "./WalletConnectInput";
 
 enum PROPOSAL_TYPES {
   SEND_ETH,
   MANAGE_OWNERS,
   CUSTOM_CALL,
   SPLIT_ETH,
+  WALLET_CONNECT,
 }
 
 const isENS = (address = "") => address.endsWith(".eth") || address.endsWith(".xyz");
@@ -313,6 +315,12 @@ export const ProposalModal = ({
               >
                 Split eth
               </a>
+              <a
+                className={`tab tab-lifted ${PROPOSAL_TYPES.WALLET_CONNECT === currentTab && "tab-active"}`}
+                onClick={() => onChangeTab(PROPOSAL_TYPES.WALLET_CONNECT)}
+              >
+                Wallet connect
+              </a>
             </div>
             {/* body content */}
             <div>
@@ -416,15 +424,23 @@ export const ProposalModal = ({
                 </div>
               )}
             </div>
-
-            <div className="m-4">
-              <InputBase onChange={setCustomNonce} value={customNonce} placeholder="Enter Custom nonce (optional)" />
-              <div className="ml-2 text-gray-400">
-                nonce <span className="text-primary-focus"> {Number(nonce) + Number(poolTxNumber)}</span> = current
-                nonce <span className="text-green-400 m-1">{nonce}</span> + active
-                <span className="text-green-400 m-1">{Number(poolTxNumber)}</span> tx in pool
-              </div>
+            <div>
+              {PROPOSAL_TYPES.WALLET_CONNECT === currentTab && (
+                <div className="m-2">
+                  <WalletConnectInput />
+                </div>
+              )}
             </div>
+            {PROPOSAL_TYPES.WALLET_CONNECT !== currentTab && (
+              <div className="m-4">
+                <InputBase onChange={setCustomNonce} value={customNonce} placeholder="Enter Custom nonce (optional)" />
+                <div className="ml-2 text-gray-400">
+                  nonce <span className="text-primary-focus"> {Number(nonce) + Number(poolTxNumber)}</span> = current
+                  nonce <span className="text-green-400 m-1">{nonce}</span> + active
+                  <span className="text-green-400 m-1">{Number(poolTxNumber)}</span> tx in pool
+                </div>
+              </div>
+            )}
           </div>
           <div className="modal-action">
             <button
@@ -439,6 +455,8 @@ export const ProposalModal = ({
                   ? !recipient || !customCallData || !amount
                   : currentTab === 3
                   ? !amount || !finalSplitAddresses
+                  : currentTab === 4
+                  ? true
                   : false
               }
             >
