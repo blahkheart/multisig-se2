@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import { Footer } from "../Footer";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import axios from "axios";
 import { ethers } from "ethers";
 import { toast } from "react-hot-toast";
 import QRCode from "react-qr-code";
 import { useCopyToClipboard, useDarkMode, useDebounce, useInterval, useLocalStorage } from "usehooks-ts";
-import { Chain, useAccount, useNetwork, useSigner, useSwitchNetwork } from "wagmi";
+import { Chain, useAccount, useNetwork, useSignTypedData, useSigner, useSwitchNetwork } from "wagmi";
 import { MinusCircleIcon, PlusCircleIcon, RocketLaunchIcon, ShareIcon } from "@heroicons/react/24/outline";
 import { ConfirmNonceModal } from "~~/components/multisig/ConfirmNonceModal";
 import { ProposalModal } from "~~/components/multisig/ProposalModal";
@@ -22,6 +21,7 @@ import {
   TX_STATUS,
 } from "~~/components/scaffold-eth";
 import { useDeployedContractInfo, useEvent, useScaffoldContractWrite, useTransactor } from "~~/hooks/scaffold-eth";
+import { useAppStore } from "~~/services/store/store";
 import { notification } from "~~/utils/scaffold-eth";
 
 // const Sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -47,63 +47,6 @@ const poolData = [
     signers: ["0x0fAb64624733a7020D332203568754EB1a37DB89", "0x0fAb64624733a7020D332203568754EB1a37DB89"],
     split_addresses: [],
     cancel_signatures: [],
-    cancel_signers: [],
-    type: "transfer",
-    status: "success",
-    url: "https://example.com",
-    createdAt: "10-10-2023 10:10",
-    executedAt: "10-10-2023 10:10",
-    executedBy: "0x0fAb64624733a7020D332203568754EB1a37DB89",
-    createdBy: "0x0fAb64624733a7020D332203568754EB1a37DB89",
-    isCancel: false,
-  },
-
-  {
-    txId: 22322,
-    chainId: 31337,
-    walletAddress: "0xbA61FFB5378D34aCD509205Fd032dFEBEc598975",
-    nonce: "1",
-    to: "0x0fAb64624733a7020D332203568754EB1a37DB89",
-    amount: 0.0007152513035455008,
-    data: "0x",
-    cancel_data: "0x",
-    hash: "0x58670d26e3add93a7480ceb162ad4b236f6306e260e91d7976c339b9279fee53",
-    cancel_hash: "0x58670d26e3add93a7480ceb162ad4b236f6306e260e91d7976c339b9279fee53",
-    signatures: [
-      "0x1f19e9e2bd95ec771926c4eba4c91e0d0da01e91f1188858edee9dd10cc61d7c26dc656a3fc7375053f3f7544136b7db4ed5c391624bb263330e12b5c7f1ed151b",
-      "0x1f19e9e2bd95ec771926c4eba4c91e0d0da01e91f1188858edee9dd10cc61d7c26dc656a3fc7375053f3f7544136b7db4ed5c391624bb263330e12b5c7f1ed151b",
-    ],
-    signers: ["0x0fAb64624733a7020D332203568754EB1a37DB89", "0x0fAb64624733a7020D332203568754EB1a37DB89"],
-    split_addresses: [],
-    cancel_signatures: [],
-    cancel_signers: [],
-    type: "transfer",
-    status: "success",
-    url: "https://example.com",
-    createdAt: "10-10-2023 10:10",
-    executedAt: "10-10-2023 10:10",
-    executedBy: "0x0fAb64624733a7020D332203568754EB1a37DB89",
-    createdBy: "0x0fAb64624733a7020D332203568754EB1a37DB89",
-    isCancel: false,
-  },
-  {
-    txId: 22323,
-    chainId: 31337,
-    walletAddress: "0xbA61FFB5378D34aCD509205Fd032dFEBEc598975",
-    nonce: "2",
-    to: "0x0fAb64624733a7020D332203568754EB1a37DB89",
-    amount: 0.0007152513035455008,
-    data: "0x",
-    cancel_data: "0x",
-    hash: "0x58670d26e3add93a7480ceb162ad4b236f6306e260e91d7976c339b9279fee53",
-    cancel_hash: "0x58670d26e3add93a7480ceb162ad4b236f6306e260e91d7976c339b9279fee53",
-    signatures: [],
-    signers: ["0x0fAb64624733a7020D332203568754EB1a37DB89", "0x0fAb64624733a7020D332203568754EB1a37DB89"],
-    split_addresses: [],
-    cancel_signatures: [
-      "0x1f19e9e2bd95ec771926c4eba4c91e0d0da01e91f1188858edee9dd10cc61d7c26dc656a3fc7375053f3f7544136b7db4ed5c391624bb263330e12b5c7f1ed151b",
-      "0x1f19e9e2bd95ec771926c4eba4c91e0d0da01e91f1188858edee9dd10cc61d7c26dc656a3fc7375053f3f7544136b7db4ed5c391624bb263330e12b5c7f1ed151b",
-    ],
     cancel_signers: [],
     type: "transfer",
     status: "success",
@@ -165,6 +108,11 @@ const Home = ({
 
   const [value, copy] = useCopyToClipboard();
 
+  // global zustand hook
+  const setWalletAddress = useAppStore(state => state.setWalletAddress);
+  const setCurrentWalletContract = useAppStore(state => state.setCurrentWalletContract);
+  const setTxPoolLength = useAppStore(state => state.setTxPoolLength);
+
   // useHooks
   const debounceWalletName = useDebounce(walletName, 500);
   const { isDarkMode } = useDarkMode();
@@ -182,7 +130,7 @@ const Home = ({
     functionName: "create2",
 
     args: [ownersAddress, signatures as any, debounceWalletName],
-    value: walletAmount,
+    value: walletAmount && !isNaN(+walletAmount) ? `${Number(walletAmount)}` : "0",
   });
 
   const Tx = useTransactor(signer ? signer : undefined);
@@ -271,12 +219,13 @@ const Home = ({
 
     // loading a  url shared wallet
     if (isSharedWallet === true && deployedWalletInfo && signer) {
-      const walletContract = new ethers.Contract(walletAddress, deployedWalletInfo?.abi, signer);
+      const walletContract = new ethers.Contract(walletAddress ? walletAddress : "", deployedWalletInfo?.abi, signer);
       const walletName = await walletContract.name();
 
       onChangeWallet(walletAddress, walletName);
       setCurrentWalletName(walletName);
       setCurrentWalletAddress(walletAddress);
+      setWalletAddress(walletAddress || "");
       return;
     }
 
@@ -288,14 +237,16 @@ const Home = ({
         onChangeWallet(lastWallet.contractAddress, lastWallet.name);
         setCurrentWalletName(lastWallet.name);
         setCurrentWalletAddress(lastWallet.contractAddress);
+        setWalletAddress(lastWallet.contractAddress);
         return;
       }
 
       // already loaded then selecting last selected wallet
       if (chain && walletData && walletData[chain.id]?.selectedWalletAddress !== undefined) {
         onChangeWallet(walletData[chain.id]?.selectedWalletAddress, walletData[chain.id]?.selectedWalletName);
-        setCurrentWalletName(walletData[chain.id]?.selectedWalletName);
+        setCurrentWalletName(walletData[chain.id]?.selectedWalletName || "");
         setCurrentWalletAddress(walletData[chain.id]?.selectedWalletAddress);
+        setWalletAddress(walletData[chain.id]?.selectedWalletAddress || "");
 
         return;
       }
@@ -360,6 +311,7 @@ const Home = ({
       setNonce(nonce.toString());
       setWalletOwners(owners);
       setCurrentWalletAddress(walletAddress);
+      setWalletAddress(walletAddress || "");
     }
   };
 
@@ -514,7 +466,6 @@ const Home = ({
   };
 
   const onExecute = async (item, isCancel = false) => {
-    console.log(`n-🔴 => onExecute => item:`, item);
     // override values for cancel tx
     if (isCancel) {
       item.data = item.cancel_data;
@@ -566,8 +517,6 @@ const Home = ({
   const onAddOwner = async () => {
     if (ethers.utils.isAddress(ownerAddress)) {
       setOwnersAddress([...new Set([...ownersAddress, ownerAddress])]);
-      setOwnerAddress("");
-    } else {
       setOwnerAddress("");
     }
   };
@@ -648,7 +597,6 @@ const Home = ({
         toast.error("Selected transaction nonce order is incorrect or verify batch tx starting from current nonce!");
       }
     } catch (error: any) {
-      console.log(`n-🔴 => onBatchExecute => error:`, error);
       notification.error(error.message);
     }
   };
@@ -686,7 +634,7 @@ const Home = ({
 
   useEffect(() => {
     if (chains.length > 0) {
-      setChainData(chains.filter(item => [11155111, 31337].includes(item.id)));
+      setChainData(chains.filter(item => [11155111, 31337, 5].includes(item.id)));
     }
   }, [chains]);
 
@@ -732,6 +680,22 @@ const Home = ({
       void loadTxPool();
     }
   }, [chain, walletContract, isProposalModalOpen, togglePool]);
+
+  // update global states
+
+  useEffect(() => {
+    if (walletContract && txPool) {
+      setCurrentWalletContract(walletContract);
+      setTxPoolLength(txPool.length);
+    }
+  }, [walletContract, txPool]);
+
+  // add create wallet address
+  useEffect(() => {
+    if (ownerAddress) {
+      onAddOwner();
+    }
+  }, [ownerAddress]);
 
   // dynamic values
   const walletList = [...filterWallets()];
@@ -804,7 +768,8 @@ const Home = ({
 
       {isConnected === false && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2  z-50">
-          <ConnectButton label="Connect" />
+          {/* <ConnectButton label="Connect" /> */}
+          <div className="text-primary-focus">Connect your wallet to see multisig !</div>
         </div>
       )}
 
@@ -862,6 +827,8 @@ const Home = ({
                 address={address}
                 nonce={nonce}
                 poolTxNumber={txPool?.length}
+                numberOfOwners={numberOfOwners}
+                currentSignatures={signaturesRequired}
               />
             </div>
           </div>
@@ -1350,9 +1317,6 @@ const Home = ({
             <div className="m-2 flex flex-col items-start">
               <div className="flex">
                 <AddressInput onChange={setOwnerAddress} value={ownerAddress} placeholder="Enter owner address" />
-                <button className="btn btn-accent btn-sm" onClick={onAddOwner} disabled={!ownerAddress}>
-                  +
-                </button>
               </div>
               <div className="flex flex-col m-2">
                 {ownersAddress.map(ownerAddress => {
@@ -1382,10 +1346,8 @@ const Home = ({
             </div>
             <div className="m-2">
               <EtherInput
-                onChange={value => {
-                  setWalletAmount(value);
-                }}
-                value={walletAmount ? walletAmount : ""}
+                onChange={setWalletAmount}
+                value={walletAmount as string}
                 placeholder="Enter initial amount (optional)"
               />
             </div>
